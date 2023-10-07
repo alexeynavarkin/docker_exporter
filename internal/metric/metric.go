@@ -75,7 +75,7 @@ func (c *Collector) handler() http.Handler {
 
 func (c *Collector) ExposeHTTP(ctx context.Context) {
 	mux := http.NewServeMux()
-	mux.Handle("/metric", c.handler())
+	mux.Handle("/metrics", c.handler())
 
 	s := http.Server{
 		Addr:    ":8080",
