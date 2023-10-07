@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
-	"time"
 
-	"github.com/docker/docker/api/types"
+	"github.com/alexeynavarkin/docker_exporter/internal/event"
+	"github.com/alexeynavarkin/docker_exporter/internal/metric"
+	"github.com/alexeynavarkin/docker_exporter/internal/stat"
 	"github.com/docker/docker/client"
 )
 
@@ -23,37 +23,15 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancel()
 
-	for {
-		runCtx, runCancel := context.WithCancel(ctx)
-		go handleEvents(ctx, runCancel, cli)
-		<-runCtx.Done()
+	metricCollector := metric.NewCollector()
 
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
+	statGatherer := stat.NewGatherer(cli, metricCollector)
+	metricCollector.RegisterGatherer(statGatherer)
 
-		fmt.Printf("will try to reconnect after 1 sec\n")
-		time.Sleep(time.Second)
-	}
-}
+	evHandler := event.NewHandler(cli, metricCollector)
 
-func handleEvents(ctx context.Context, cancel func(), cli *client.Client) {
-	defer cancel()
+	go evHandler.HandleEvents(ctx)
+	go metricCollector.ExposeHTTP(ctx)
 
-	fmt.Printf("start listen events\n")
-	msgCh, errCh := cli.Events(ctx, types.EventsOptions{})
-	for {
-		select {
-		case ev := <-msgCh:
-			fmt.Printf("captured event: %+v\n", ev)
-		case ev := <-errCh:
-			fmt.Printf("captured error event %v\n", ev)
-			return
-		case <-ctx.Done():
-			fmt.Printf("captured stop event, shut down\n")
-			return
-		}
-	}
+	<-ctx.Done()
 }
