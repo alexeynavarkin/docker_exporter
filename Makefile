@@ -4,4 +4,4 @@ default:
 	@echo "no default target"
 
 publish-image:
-	docker buildx build -f deployments/Dockerfile -t alexnav/docker-exporter:0.0.3 --platform=linux/amd64,linux/arm64 --push .
+	docker buildx build -f deployments/Dockerfile -t alexnav/docker-exporter:0.0.6 --platform=linux/amd64,linux/arm64 --push .
