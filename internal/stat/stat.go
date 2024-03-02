@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/alexeynavarkin/docker_exporter/internal/metric"
@@ -15,10 +16,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+var labelsContainer = []string{"containerName", "serviceName", "serviceID", "type"}
+
 type response struct {
-	CpuStats     types.CPUStats                `json:"cpu_stats"`
-	MemStats     types.MemoryStats             `json:"memory_stats"`
 	NetworkStats map[string]types.NetworkStats `json:"networks"`
+	MemStats     types.MemoryStats             `json:"memory_stats"`
+	CpuStats     types.CPUStats                `json:"cpu_stats"`
 }
 
 type Gatherer struct {
@@ -39,7 +42,7 @@ func NewGatherer(cli *client.Client, metricCollector *metric.Collector) *Gathere
 				Name:      "stat_ns",
 				Help:      "Container cpu usage.",
 			},
-			[]string{"serviceName", "serviceID", "type"},
+			labelsContainer,
 		),
 		metricMemStats: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -48,7 +51,7 @@ func NewGatherer(cli *client.Client, metricCollector *metric.Collector) *Gathere
 				Name:      "stat_bytes",
 				Help:      "Container memory usage.",
 			},
-			[]string{"serviceName", "serviceID", "type"},
+			labelsContainer,
 		),
 		metricNetStats: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -57,7 +60,7 @@ func NewGatherer(cli *client.Client, metricCollector *metric.Collector) *Gathere
 				Name:      "stat_bytes",
 				Help:      "Container network usage.",
 			},
-			[]string{"serviceName", "serviceID", "type"},
+			labelsContainer,
 		),
 		cli:             cli,
 		metricCollector: metricCollector,
@@ -72,7 +75,8 @@ func (g *Gatherer) Gather() {
 	containers, err := g.cli.ContainerList(
 		context.Background(),
 		types.ContainerListOptions{
-			Filters: filters.NewArgs(filters.Arg("status", "running"))},
+			Filters: filters.NewArgs(filters.Arg("status", "running")),
+		},
 	)
 	if err != nil {
 		fmt.Printf("error get container list %v\n", err)
@@ -100,36 +104,42 @@ func (g *Gatherer) collectContainer(c types.Container, wg *sync.WaitGroup) {
 		return
 	}
 
+	containerName := strings.Join(c.Names, "")
+
 	m, _ := g.metricMemStats.GetMetricWith(
 		prometheus.Labels{
-			"serviceName": util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
-			"serviceID":   util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
-			"type":        "used",
+			"containerName": containerName,
+			"serviceName":   util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
+			"serviceID":     util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
+			"type":          "used",
 		},
 	)
 	m.Set(float64(resp.MemStats.Usage))
 
 	m, _ = g.metricCpuStats.GetMetricWith(
 		prometheus.Labels{
-			"serviceName": util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
-			"serviceID":   util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
-			"type":        "usermode",
+			"containerName": containerName,
+			"serviceName":   util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
+			"serviceID":     util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
+			"type":          "usermode",
 		},
 	)
 	m.Set(float64(resp.CpuStats.CPUUsage.UsageInUsermode))
 	m, _ = g.metricCpuStats.GetMetricWith(
 		prometheus.Labels{
-			"serviceName": util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
-			"serviceID":   util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
-			"type":        "kernelmode",
+			"containerName": containerName,
+			"serviceName":   util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
+			"serviceID":     util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
+			"type":          "kernelmode",
 		},
 	)
 	m.Set(float64(resp.CpuStats.CPUUsage.UsageInKernelmode))
 	m, _ = g.metricCpuStats.GetMetricWith(
 		prometheus.Labels{
-			"serviceName": util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
-			"serviceID":   util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
-			"type":        "throttled",
+			"containerName": containerName,
+			"serviceName":   util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
+			"serviceID":     util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
+			"type":          "throttled",
 		},
 	)
 	m.Set(float64(resp.CpuStats.ThrottlingData.ThrottledTime))
@@ -137,33 +147,37 @@ func (g *Gatherer) collectContainer(c types.Container, wg *sync.WaitGroup) {
 	for _, iface := range resp.NetworkStats {
 		m, _ = g.metricNetStats.GetMetricWith(
 			prometheus.Labels{
-				"serviceName": util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
-				"serviceID":   util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
-				"type":        "rx",
+				"containerName": containerName,
+				"serviceName":   util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
+				"serviceID":     util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
+				"type":          "rx",
 			},
 		)
 		m.Add((float64(iface.RxBytes)))
 		m, _ = g.metricNetStats.GetMetricWith(
 			prometheus.Labels{
-				"serviceName": util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
-				"serviceID":   util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
-				"type":        "tx",
+				"containerName": containerName,
+				"serviceName":   util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
+				"serviceID":     util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
+				"type":          "tx",
 			},
 		)
 		m.Add((float64(iface.TxBytes)))
 		m, _ = g.metricNetStats.GetMetricWith(
 			prometheus.Labels{
-				"serviceName": util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
-				"serviceID":   util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
-				"type":        "drop",
+				"containerName": containerName,
+				"serviceName":   util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
+				"serviceID":     util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
+				"type":          "drop",
 			},
 		)
 		m.Add((float64(iface.RxDropped + iface.TxDropped)))
 		m, _ = g.metricNetStats.GetMetricWith(
 			prometheus.Labels{
-				"serviceName": util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
-				"serviceID":   util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
-				"type":        "error",
+				"containerName": containerName,
+				"serviceName":   util.GetMapValue(c.Labels, util.LabelNameServiceName, util.LabelDefaultValue),
+				"serviceID":     util.GetMapValue(c.Labels, util.LabelNameServiceID, util.LabelDefaultValue),
+				"type":          "error",
 			},
 		)
 		m.Add((float64(iface.RxErrors + iface.TxErrors)))

@@ -71,6 +71,7 @@ func (h *Handler) handleEvent(ev events.Message) {
 		switch ev.Action {
 		case ActionTypeOOM:
 			h.metricCollector.RegisterEvent(
+				ev.Actor.Attributes["name"],
 				util.GetMapValue(ev.Actor.Attributes, util.LabelNameServiceName, util.LabelDefaultValue),
 				util.GetMapValue(ev.Actor.Attributes, util.LabelNameServiceID, util.LabelDefaultValue),
 				ev.Action,
