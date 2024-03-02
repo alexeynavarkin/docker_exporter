@@ -33,7 +33,7 @@ func NewCollector() *Collector {
 				Name:      "event",
 				Help:      "Docker events.",
 			},
-			[]string{"serviceName", "serviceID", "eventType"},
+			[]string{"containerName", "serviceName", "serviceID", "eventType"},
 		),
 		reg:                reg,
 		defaultHandlerFunc: promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}),
@@ -51,12 +51,13 @@ func (c *Collector) RegisterGatherer(gatherer Gatherer) {
 	c.gatherers = append(c.gatherers, gatherer)
 }
 
-func (c *Collector) RegisterEvent(serviceName string, serviceID string, eventType string) {
+func (c *Collector) RegisterEvent(containerName, serviceName, serviceID, eventType string) {
 	c.event.With(
 		prometheus.Labels{
-			"serviceName": serviceName,
-			"serviceID":   serviceID,
-			"eventType":   eventType,
+			"containerName": containerName,
+			"serviceName":   serviceName,
+			"serviceID":     serviceID,
+			"eventType":     eventType,
 		},
 	).Inc()
 }
