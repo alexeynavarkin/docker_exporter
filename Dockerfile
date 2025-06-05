@@ -1,9 +1,8 @@
-FROM --platform=$BUILDPLATFORM golang:1.21.1-alpine3.18 AS builder
+FROM golang:1.21.1-alpine3.18 AS builder
 
 WORKDIR /build
 COPY . .
-ARG TARGETOS TARGETARCH
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o docker-exporter /main.go
+RUN go build -o docker-exporter ./cmd/main.go
 
 FROM alpine:3.18
 WORKDIR /docker-exporter
